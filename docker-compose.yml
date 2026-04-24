@@ -1,0 +1,73 @@
+# Castova - Reference Docker Compose Configuration
+# Copy to /opt/castova/docker-compose.yml on your server
+# Fill in all environment variables before starting
+
+services:
+  castova:
+    image: ghcr.io/castova-io/castova:latest
+    restart: unless-stopped
+    ports:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://castova:CHANGEME@postgres:5432/castova
+      REDIS_URL: redis://:CHANGEME@redis:6379
+      JWT_SECRET: CHANGEME
+      KEYGEN_ACCOUNT_ID: CHANGEME
+      KEYGEN_PRODUCT_ID: CHANGEME
+      STRIPE_SECRET_KEY: CHANGEME
+      STRIPE_WEBHOOK_SECRET: CHANGEME
+      MQTT_URL: mqtt://mosquitto:1883
+    depends_on:
+      - postgres
+      - redis
+      - mosquitto
+    volumes:
+      - castova-media:/opt/castova/media
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: castova
+      POSTGRES_USER: castova
+      POSTGRES_PASSWORD: CHANGEME
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass CHANGEME
+    volumes:
+      - redis-data:/data
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - castova
+
+volumes:
+  postgres-data:
+  redis-data:
+  mosquitto-data:
+  castova-media:
+  caddy-data:
+  caddy-config:
