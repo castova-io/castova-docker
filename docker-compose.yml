@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   panel:
     image: ghcr.io/castova-io/panel:latest
