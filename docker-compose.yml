@@ -1,29 +1,77 @@
-# Castova - Reference Docker Compose Configuration
-# Copy to /opt/castova/docker-compose.yml on your server
-# Fill in all environment variables before starting
+version: '3.9'
 
 services:
-  castova:
-    image: ghcr.io/castova-io/castova:latest
+  panel:
+    image: ghcr.io/castova-io/panel:latest
     restart: unless-stopped
     ports:
-      - "3000"
+      - "3000:3000"
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgres://castova:CHANGEME@postgres:5432/castova
-      REDIS_URL: redis://:CHANGEME@redis:6379
-      JWT_SECRET: CHANGEME
-      KEYGEN_ACCOUNT_ID: CHANGEME
-      KEYGEN_PRODUCT_ID: CHANGEME
-      STRIPE_SECRET_KEY: CHANGEME
-      STRIPE_WEBHOOK_SECRET: CHANGEME
-      MQTT_URL: mqtt://mosquitto:1883
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - MQTT_URL=${MQTT_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_INTERNAL_URL=ws://livekit:7880
+      - BRIDGE_URL=http://studio-bridge:8091
+      - BRIDGE_SECRET=${BRIDGE_SECRET}
+      - TURN_HOST=${PANEL_DOMAIN}
+      - TURN_PORT=3478
+      - TURN_SECRET=${TURN_SECRET}
+      - PANEL_PUBLIC_URL=https://${PANEL_DOMAIN}
+      - KEYGEN_ACCOUNT_ID=${KEYGEN_ACCOUNT_ID:-}
+      - KEYGEN_PRODUCT_TOKEN=${KEYGEN_PRODUCT_TOKEN:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - SUPPORT_API_URL=https://support.castova.net
     depends_on:
-      - postgres
-      - redis
-      - mosquitto
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mosquitto:
+        condition: service_started
+
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --config /etc/livekit/livekit.yaml
     volumes:
-      - castova-media:/opt/castova/media
+      - ./livekit/livekit.yaml:/etc/livekit/livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7881:7881/udp"
+      - "50200-50300:50200-50300/udp"
+    depends_on:
+      - redis
+
+  studio-bridge:
+    image: ghcr.io/castova-io/studio-bridge:latest
+    restart: unless-stopped
+    environment:
+      - LIVEKIT_INTERNAL_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - BRIDGE_SECRET=${BRIDGE_SECRET}
+      - PANEL_URL=http://panel:3000
+      - BRIDGE_PORT=8090
+    depends_on:
+      - livekit
+      - panel
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    command: -c /etc/coturn/turnserver.conf
 
   postgres:
     image: postgres:16-alpine
@@ -31,16 +79,20 @@ services:
     environment:
       POSTGRES_DB: castova
       POSTGRES_USER: castova
-      POSTGRES_PASSWORD: CHANGEME
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U castova"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --requirepass CHANGEME
     volumes:
-      - redis-data:/data
+      - redis_data:/data
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -48,8 +100,8 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - mosquitto-data:/mosquitto/data
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
 
   caddy:
     image: caddy:2-alpine
@@ -57,17 +109,17 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy-data:/data
-      - caddy-config:/config
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - castova
+      - panel
 
 volumes:
-  postgres-data:
-  redis-data:
-  mosquitto-data:
-  castova-media:
-  caddy-data:
-  caddy-config:
+  postgres_data:
+  redis_data:
+  mosquitto_data:
+  caddy_data:
+  caddy_config:

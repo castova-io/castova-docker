@@ -1,4 +1,3 @@
-# Replace panel.example.com with your actual domain
-panel.example.com {
-    reverse_proxy castova:3000
+${PANEL_DOMAIN} {
+  reverse_proxy panel:3000
 }

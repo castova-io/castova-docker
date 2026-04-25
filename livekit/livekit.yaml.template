@@ -1,0 +1,17 @@
+# LiveKit configuration template
+# Written by installer — do not edit manually, re-run installer to reconfigure
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50200
+  port_range_end: 50300
+  use_external_ip: true
+redis:
+  address: redis:6379
+keys:
+  REPLACE_API_KEY: REPLACE_API_SECRET
+logging:
+  level: info
+room:
+  auto_create: true
+  empty_timeout: 300
